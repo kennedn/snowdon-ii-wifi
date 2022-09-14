@@ -1,0 +1,42 @@
+; Implements the NEC infrared protocol without 38khz carrier signal
+; For use in wired connection to IR line.  Each instruction is 280us
+.program nec
+.side_set 1
+.wrap_target
+    pull side 1
+pulse_init:
+    nop side 0 [15] 
+    nop side 0 [15]         ; 9ms on 
+    nop side 1 [15]         ; 4.5ms delay
+next:
+    out y 1 side 0          ; Read next bit from OSR into y, side set 0 for 1 tick (280us)
+    jmp !y short side 0     ; If y == 0, goto short,  side set 0 for 1 tick (280us)
+long:
+    jmp bit_loop side 1 [4] ; Side set 1 for 5 ticks (1400us)
+short:
+    nop side 1              ; Side set 1 for 1 tick (280us)
+bit_loop:
+    jmp !osre next side 1   ; goto next if osr is not empty, side set 1 for 1 tick (280us)
+end_pulse:
+    nop side 0 [1]          ; Side set 0 for 2 ticks (560us)
+.wrap
+
+% c-sdk {
+#include "hardware/clocks.h"
+static inline void nec_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = nec_program_get_default_config(offset);
+    sm_config_set_sideset_pins(&c, pin);
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    pio_sm_set_pins_with_mask(pio, sm, 1u << pin, 1);
+    
+    // 2 ticks per 560us window 
+    float div = clock_get_hz(clk_sys) / (2 * (1 / 560.0e-6f));
+    sm_config_set_clkdiv(&c, div);
+    sm_config_set_out_shift(&c, false, false, 32);
+    // Init the pio state machine with PC at offset
+    pio_sm_init(pio, sm, offset, &c);
+    // Start sm
+    pio_sm_set_enabled(pio, sm, true);
+}
+%}
