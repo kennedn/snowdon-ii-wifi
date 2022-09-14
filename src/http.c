@@ -6,6 +6,7 @@
 #include "hardware/pio.h"
 #include "nec.pio.h"
 
+
 static uint32_t http_code_lookup(char *code) {
     if (!strcmp(code, "status"))        { return 0; }
     if (!strcmp(code, "power"))         { return 0x807F807F; }
@@ -172,6 +173,10 @@ void http_process_recv_data(void *arg, struct tcp_pcb *tpcb) {
         http_generate_response(arg, "{\"message\": \"Endpoint not found\"}\n", "400 Bad Request");
         return;
     }
+    if (state->message_body->method == HTTP_METHOD_GET) {
+        http_generate_response(arg, "{\"code\": [\"status\", \"power\", \"mute\", \"volume_up\", \"volume_down\", \"previous\", \"next\", \"play_pause\", \"input\", \"treble_up\", \"treble_down\", \"bass_up\", \"bass_down\", \"pair\", \"flat\", \"music\", \"dialog\", \"movie\"]}\n", "200 OK");
+        return;
+    }
 
     if (state->message_body->method != HTTP_METHOD_PUT) {
         http_generate_response(arg, "{\"message\": \"HTTP method not supported\"}\n", "400 Bad Request");
@@ -180,14 +185,14 @@ void http_process_recv_data(void *arg, struct tcp_pcb *tpcb) {
     
     if (state->message_body->code > 2) {
         pio_sm_put_blocking(PIO_INSTANCE, 0, state->message_body->code);
-        http_generate_response(arg, "{\"status\": \"OK\"}\n", "200 OK");
+        http_generate_response(arg, "{\"status\": \"ok\"}\n", "200 OK");
         return;
     }
 
     if (state->message_body->code == 0) {
         uint32_t gpio;
         do {
-            gpio = (gpio_get_all() & rgb_mask) >> rgb_base_pin;
+            gpio = (gpio_get_all() & RGB_MASK) >> RGB_BASE_PIN;
             switch(gpio) {
                 case 0b110: // red
                     http_generate_response(arg, "{\"status\": \"off\"}\n", "200 OK");
