@@ -10,7 +10,7 @@ target_compile_definitions(snowdon PRIVATE
     WIFI_SSID=\"${WIFI_SSID}\"
     WIFI_PASSWORD=\"${WIFI_PASSWORD}\"
 )
-target_sources(snowdon PRIVATE snowdon.c snowdon.h http.c tcp.c http.h tcp.h)
+target_sources(snowdon PRIVATE snowdon.c http.c tcp.c)
 
 target_include_directories(snowdon PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}

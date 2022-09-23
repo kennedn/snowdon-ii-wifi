@@ -5,6 +5,8 @@
 .wrap_target
     pull side 1
 pulse_init:
+    nop side 1 [14]         ; 9ms off, pico assertion on the IR line causes temporary interference,
+    nop side 1 [15]         ; waiting some time before the init pulse seems to prevent code misses
     nop side 0 [15] 
     nop side 0 [15]         ; 9ms on 
     nop side 1 [15]         ; 4.5ms delay
@@ -31,9 +33,12 @@ static inline void nec_program_init(PIO pio, uint sm, uint offset, uint pin) {
     pio_sm_set_pins_with_mask(pio, sm, 1u << pin, 1);
     
     // 2 ticks per 560us window 
-    float div = clock_get_hz(clk_sys) / (2 * (1 / 560.0e-6f));
+    float div = clock_get_hz(clk_sys) / (2 * (1 / 562.5e-6f));
     sm_config_set_clkdiv(&c, div);
     sm_config_set_out_shift(&c, false, false, 32);
+
+    gpio_pull_up(pin);
+
     // Init the pio state machine with PC at offset
     pio_sm_init(pio, sm, offset, &c);
     // Start sm

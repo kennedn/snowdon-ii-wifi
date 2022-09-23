@@ -7,7 +7,7 @@
 #include "nec.pio.h"
 
 
-static uint32_t http_code_lookup(char *code) {
+static uint32_t http_ir_lookup(char *code) {
     if (!strcmp(code, "status"))        { return 0; }
     if (!strcmp(code, "power"))         { return 0x807F807F; }
     if (!strcmp(code, "mute"))          { return 0x807FCC33; }
@@ -38,6 +38,7 @@ static void http_message_body_parse(void *arg) {
     state->message_body->version = HTTP_VERSION_1;
     state->message_body->code = 2;
 
+    // Process HTTP message body, example: "PUT /?code=power HTTP/1.1"
     char *message_body = (char*)state->buffer_recv;
     char *delim = " ?=&\r";
     char next_delim;
@@ -79,40 +80,49 @@ static void http_message_body_parse(void *arg) {
             case '=':
                     DEBUG_printf("http_message_body_parse value: %s\n", token);
                     if (!strcmp(key, "code")) {
-                        state->message_body->code = http_code_lookup(token);
+                        state->message_body->code = http_ir_lookup(token);
                         DEBUG_printf("http_message_body_parse code: %#x\n", state->message_body->code);
                     }
                 break; 
         }
         current_delim = next_delim;
-        message_body++;
+        message_body++; 
+        // Carriage return indicates we have reached the end of the first line of message body
         if (current_delim == '\r') { break; }
-    }
-    if (state->message_body->code != -1) { return; }
+    }                   
+    // Short circuit further processing if code variable has been found 
+    if (state->message_body->code != 2) { return; }
+    // Return if no header present to indicate JSON content
     if (strstr(message_body, "Content-Type: application/json") == NULL) { return; }
+
+    // Seek to last occurrence of newline, which should contain JSON string
     message_body = strrchr(message_body, '\n');
-    message_body++;  // message_body = '{"code": "00F7C03F"}'
+    message_body++;  // message_body = '{"code": "power"}'
     DEBUG_printf("http_message_body_parse message_body: %s\n", message_body);
-
-
+                        
+                        
     // Lazy man's JSON parser, iterate over key-value pairs from JSON string, ignoring non string values. Treats JSON as a flat file.
-
+                        
     // Seek past first occurance of '{'
     message_body = strpbrk(message_body, "{");
-    message_body ++;  // message_body = '"code": "00F7C03F"}'
-    key = NULL;
+    if (message_body == NULL) {
+        DEBUG_printf("http_message_body_parse: malformed json");
+        return;
+    }
+    message_body ++;  // message_body = '"code": "power"}'
+    key = NULL;         
     while(1) {
         // Seek past first occurance of '\"'
         message_body = strpbrk(message_body, "\"");
         if (message_body == NULL) { break; }
-        message_body++; // message_body = 'code": "00F7C03F"}'
+        message_body++; // message_body = 'code": "power"}'
 
         // Null terminate the next occurance of '\"' and seek past it, store reference to substring in token
         token = message_body;  
         message_body = strpbrk(message_body, "\"");
         if (message_body == NULL) { break; }
         *message_body = '\0';  // token = 'code'
-        message_body++; // message_body = ': "00F7C03F"}'
+        message_body++; // message_body = ': "power"}'
         DEBUG_printf("http_message_body_parse key: %s\n", token);
 
         // Store token in key for later validation
@@ -138,16 +148,16 @@ static void http_message_body_parse(void *arg) {
         }
 
         // Value looks valid, seek past '\"', null terminate the next occurance of '\"', store reference to value in token
-        message_body++;  // message_body = '00F7C03F"}'
+        message_body++;  // message_body = 'power"}'
         token = message_body;
         message_body = strpbrk(message_body, "\"");
         if (message_body == NULL) { break; }
-        *message_body = '\0';  // token = '00F7C03F'
+        *message_body = '\0';  // token = 'power'
         DEBUG_printf("http_message_body_parse value: %s\n", token);
 
         // Validate that the key associated with this value is the one we want. If so, capture the value and return
         if (!strcmp(key, "code")) { 
-            state->message_body->code = http_code_lookup(token); 
+            state->message_body->code = http_ir_lookup(token); 
             DEBUG_printf("http_message_body_parse code: %llu\n", state->message_body->code);
             return; 
         }
@@ -174,7 +184,26 @@ void http_process_recv_data(void *arg, struct tcp_pcb *tpcb) {
         return;
     }
     if (state->message_body->method == HTTP_METHOD_GET) {
-        http_generate_response(arg, "{\"code\": [\"status\", \"power\", \"mute\", \"volume_up\", \"volume_down\", \"previous\", \"next\", \"play_pause\", \"input\", \"treble_up\", \"treble_down\", \"bass_up\", \"bass_down\", \"pair\", \"flat\", \"music\", \"dialog\", \"movie\"]}\n", "200 OK");
+        http_generate_response(arg, "{\"code\": ["
+                "\"status\", "
+                "\"power\", "
+                "\"mute\", "
+                "\"volume_up\", "
+                "\"volume_down\", "
+                "\"previous\", "
+                "\"next\", "
+                "\"play_pause\", "
+                "\"input\", "
+                "\"treble_up\", "
+                "\"treble_down\", "
+                "\"bass_up\", "
+                "\"bass_down\", "
+                "\"pair\", "
+                "\"flat\", "
+                "\"music\", "
+                "\"dialog\", "
+                "\"movie\""
+            "]}\n", "200 OK");
         return;
     }
 
@@ -195,19 +224,19 @@ void http_process_recv_data(void *arg, struct tcp_pcb *tpcb) {
             gpio = (gpio_get_all() & RGB_MASK) >> RGB_BASE_PIN;
             switch(gpio) {
                 case 0b110: // red
-                    http_generate_response(arg, "{\"status\": \"off\"}\n", "200 OK");
+                    http_generate_response(arg, "{\"onoff\": \"off\", \"input\": \"off\"}\n", "200 OK");
                     break;
                 case 0b100: // yellow
-                    http_generate_response(arg, "{\"status\": \"optical\"}\n", "200 OK");
+                    http_generate_response(arg, "{\"onoff\": \"on\", \"input\": \"optical\"}\n", "200 OK");
                     break;
                 case 0b000: // white
-                    http_generate_response(arg, "{\"status\": \"aux\"}\n", "200 OK");
+                    http_generate_response(arg, "{\"onoff\": \"on\", \"input\": \"aux\"}\n", "200 OK");
                     break;
                 case 0b101: // green
-                    http_generate_response(arg, "{\"status\": \"line-in\"}\n", "200 OK");
+                    http_generate_response(arg, "{\"onoff\": \"on\", \"input\": \"line-in\"}\n", "200 OK");
                     break;
                 case 0b011: // blue
-                    http_generate_response(arg, "{\"status\": \"bluetooth\"}\n", "200 OK");
+                    http_generate_response(arg, "{\"onoff\": \"on\", \"input\": \"bluetooth\"}\n", "200 OK");
                     break;
                 case 0b111: // off
                     busy_wait_ms(50);
