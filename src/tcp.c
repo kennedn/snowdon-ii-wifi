@@ -119,6 +119,15 @@ static void tcp_server_err(void *arg, err_t err) {
 
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
+
+    // Would need to refactor to be able to handle simultaneous connections or even respond in HTTP,
+    // So just abort any additional connections if one is currently in-flight
+    if (state->client_pcb != NULL) {
+       DEBUG_printf("Connection already in flight, aborting\n");
+       tcp_abort(client_pcb); 
+       return ERR_ABRT;
+    }
+
     if (err != ERR_OK || client_pcb == NULL) {
         DEBUG_printf("Failure in accept\n");
         tcp_client_close(arg);
