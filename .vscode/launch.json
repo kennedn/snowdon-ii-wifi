@@ -9,7 +9,7 @@
             "request": "launch",
             "servertype": "external",
             "gdbPath" : "gdb-multiarch",
-            "gdbTarget": "pizero.int:3333",
+            "gdbTarget": "auxpi.int:3333",
             "svdFile": "${env:PICO_SDK_PATH}/src/rp2040/hardware_regs/rp2040.svd",
             "runToMain": true,
             // Work around for stopping at main on restart

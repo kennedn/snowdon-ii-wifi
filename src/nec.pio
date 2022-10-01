@@ -1,4 +1,4 @@
-; Implements the NEC infrared protocol without 38khz carrier signal
+; Implements an inverted NEC infrared protocol without 38khz carrier signal
 ; For use in wired connection to IR line.  Each instruction is 280us
 .program nec
 .side_set 1

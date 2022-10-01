@@ -13,4 +13,7 @@ typedef struct TCP_SERVER_T_ {
     HTTP_MESSAGE_BODY_T *message_body;
 } TCP_SERVER_T;
 
+/*!
+  * \brief TCP entrypoint, initialise tcp server and wifi. Polls wifi connection periodically to retain connectivity
+  */
 void run_tcp_server(void);

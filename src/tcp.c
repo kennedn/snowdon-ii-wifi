@@ -6,6 +6,11 @@
 #include "http.h"
 #include "tcp.h"
 
+
+/*!
+  * \brief Allocate memory for state structure
+  * \return Pointer to TCP server state struct
+  */
 static TCP_SERVER_T* tcp_server_init(void) {
     TCP_SERVER_T *state = calloc(1, sizeof(TCP_SERVER_T));
     state->message_body = (HTTP_MESSAGE_BODY_T*)calloc(1, sizeof(HTTP_MESSAGE_BODY_T));
@@ -16,6 +21,11 @@ static TCP_SERVER_T* tcp_server_init(void) {
     return state;
 }
 
+
+/*!
+  * \brief Shut down TCP client connection
+  * \param arg TCP server state struct
+  */
 static err_t tcp_client_close(void *arg) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     err_t err = ERR_OK;
@@ -35,6 +45,10 @@ static err_t tcp_client_close(void *arg) {
     return err;
 }
 
+/*!
+  * \brief Shut down TCP server
+  * \param arg TCP server state struct
+  */
 static void tcp_server_close(void *arg) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     if (state->server_pcb == NULL) { return; }
@@ -43,6 +57,14 @@ static void tcp_server_close(void *arg) {
     state->server_pcb = NULL;
 }
 
+/*!
+  * \brief TCP send callback, called on each data transfer on the back of a tcp_write(). 
+  *        Closes client connection when full length of data has been sent
+  * \param arg TCP server state struct
+  * \param tpcb Client TCP protocol control block
+  * \param len Length of data sent
+  * \return err_t Success indicator
+  */
 static err_t tcp_server_send(void *arg, struct tcp_pcb *tpcb, u16_t len) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     DEBUG_printf("tcp_server_send %u\n", len);
@@ -57,15 +79,19 @@ static err_t tcp_server_send(void *arg, struct tcp_pcb *tpcb, u16_t len) {
     return ERR_OK;
 }
 
+/*!
+  * \brief Send data to client
+  * 
+  * \param arg TCP server state struct
+  * \param tpcb Client TCP protocol control block
+  * \return err_t Success indicator
+  */
 err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb)
 {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
 
     state->send_len = 0;
     DEBUG_printf("Writing %ld bytes to client\n", state->payload_len);
-    // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
-    // can use this method to cause an assertion in debug mode, if this method is called when
-    // cyw43_arch_lwip_begin IS needed
     cyw43_arch_lwip_check();
     err_t err = tcp_write(tpcb, state->buffer_send, state->payload_len, TCP_WRITE_FLAG_COPY);
     if (err != ERR_OK) {
@@ -75,15 +101,20 @@ err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb)
     return ERR_OK;
 }
 
-
+/*!
+  * \brief Process data received from client, call into http module when full buffer is received
+  * 
+  * \param arg TCP server state struct
+  * \param tpcb Client TCP protocol control block
+  * \param p Packet buffer
+  * \param err Success indicator
+  * \return err_t Success indicator
+  */
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     if (!p) {
         return tcp_client_close(arg);
     }
-    // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
-    // can use this method to cause an assertion in debug mode, if this method is called when
-    // cyw43_arch_lwip_begin IS needed
     cyw43_arch_lwip_check();
     if (p->tot_len > 0) {
         DEBUG_printf("tcp_server_recv %d/%d err %d\n", p->tot_len, state->recv_len, err);
@@ -98,7 +129,7 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
     // Have we have received the whole buffer
     if (state->recv_len == p->tot_len) {
         DEBUG_printf("tcp_server_recv buffer ok: %s\n", state->buffer_recv);
-        http_process_recv_data(arg, tpcb);
+        http_process_recv_data(arg);
         tcp_server_send_data(arg, tpcb);
     }
     pbuf_free(p);
@@ -117,6 +148,15 @@ static void tcp_server_err(void *arg, err_t err) {
     }
 }
 
+
+/*!
+  * \brief Client connect entrypoint, set up client callbacks or abort if request is in-flight
+  * 
+  * \param arg TCP server state struct
+  * \param client_pcb Client TCP protocol control block
+  * \param err Success indicator
+  * \return err_t Success indicator
+  */
 static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
 
@@ -146,6 +186,13 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err)
     return ERR_OK;
 }
 
+/*!
+  * \brief Attempts to start TCP server, setting up client accept callback if successful
+  * 
+  * \param arg TCP server state struct
+  * \return true TCP server was opened successfully
+  * \return false TCP server could not be opened
+  */
 static bool tcp_server_open(void *arg) {
     TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
     DEBUG_printf("Starting server at %s on port %u\n", ip4addr_ntoa(netif_ip4_addr(netif_list)), TCP_PORT);
@@ -177,6 +224,9 @@ static bool tcp_server_open(void *arg) {
     return true;
 }
 
+/*!
+  * \brief TCP entrypoint, initialise tcp server and wifi. Polls wifi connection periodically to retain connectivity
+  */
 void run_tcp_server(void) {
     if (cyw43_arch_init()) {
         printf("failed to initialise\n");
@@ -184,7 +234,6 @@ void run_tcp_server(void) {
     }
 
     cyw43_arch_enable_sta_mode();
-    while(cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {}
 
     TCP_SERVER_T *state = tcp_server_init();
     if (!state) {
@@ -199,7 +248,10 @@ void run_tcp_server(void) {
     }
 
     while(1) {
-        tight_loop_contents();
+        // Wifi appears to disconnect after some time, so re-check connection on a timer
+        if(!cyw43_arch_wifi_connect_timeout_ms(WIFI_SSID, WIFI_PASSWORD, CYW43_AUTH_WPA2_AES_PSK, 30000)) {
+            sleep_ms(10000);
+        }
     }
 
     tcp_client_close(state);
