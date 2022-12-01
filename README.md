@@ -2,7 +2,7 @@
 
 A hardware hack for the [MAJORITY Snowdon II Sound bar](https://www.majority.co.uk/soundbars/snowdon/) that adds WiFi capabilities, essentially transforming it into an IoT device.
 
-Full writeup available over on the [blog post](https://kennedn.comblog/posts/snowdon/).
+Full writeup available over on the [blog post](https://kennedn.com/blog/posts/snowdon/).
 
 ## Wiring
 
