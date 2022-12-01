@@ -9,8 +9,7 @@ Full writeup available over on the [blog post](https://kennedn.comblog/posts/sno
 > `SWDIO` and `SWCLK` are not required for normal operations, they expose the SWD debug pins on the unused USB header for easy access
 <table style="width:100%; margin-left: auto; margin-right: auto">
 <tr><td style="width:30%; padding: 1px;">
-
-![](./media/snowdon_wiring_goat.svg)
+<img src="./media/snowdon_wiring_goat.png"/>
 </td>
 <td style="width:70%; padding 1px;">
     <img src="./media/snowdon_fritzing.png" />
